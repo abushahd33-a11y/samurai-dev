@@ -4,7 +4,7 @@ const fetch = require("node-fetch");
 const app = express();
 app.use(express.json());
 
-app.post("/check", async (req, res) => {
+app.all("/check", async (req, res) => {
     try {
         const { license, device } = req.body;
 
