@@ -6,14 +6,15 @@ app.use(express.json());
 
 app.all("/check", async (req, res) => {
     try {
-        const { license, device } = req.body;
+        // يدعم GET و POST
+        const license = req.body?.license || req.query.license;
+        const device = req.body?.device || req.query.device;
 
-        // تحقق بسيط (تقدر تطوره)
-        if (!license || !device) {
+        if (!license) {
             return res.json({ success: false });
         }
 
-        // الاتصال الحقيقي (مخفي)
+        // الاتصال بـ jsonbin
         const response = await fetch("https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95/latest", {
             headers: {
                 "X-Master-Key": "YOUR_SECRET_KEY"
@@ -24,6 +25,7 @@ app.all("/check", async (req, res) => {
 
         res.json({
             success: true,
+            license: license,
             data: data
         });
 
@@ -32,6 +34,9 @@ app.all("/check", async (req, res) => {
     }
 });
 
-app.listen(3000, () => {
+// مهم لـ Render
+const PORT = process.env.PORT || 3000;
+
+app.listen(PORT, () => {
     console.log("Server running...");
 });
