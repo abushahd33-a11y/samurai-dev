@@ -23,11 +23,25 @@ app.all("/check", async (req, res) => {
 
         const data = await response.json();
 
-        res.json({
-            success: true,
-            license: license,
-            data: data
-        });
+const licenses = data.record.licenses;
+
+// ابحث عن الكود
+const found = licenses.find(l => l.key === license);
+
+if (!found) {
+    return res.json({ success: false });
+}
+
+// تحقق إذا مفعل
+if (!found.active) {
+    return res.json({ success: false });
+}
+
+// نجاح
+res.json({
+    success: true,
+    license: license
+});
 
     } catch (e) {
         res.json({ success: false });
