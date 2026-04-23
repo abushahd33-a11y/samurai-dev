@@ -4,23 +4,24 @@ const fetch = require("node-fetch");
 const app = express();
 app.use(express.json());
 
+const BIN_URL = "https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95";
+const MASTER_KEY = "YOUR_SECRET_KEY";
+
 app.all("/check", async (req, res) => {
     try {
+        // قراءة الكود + الجهاز (device اختياري)
         const license = req.body?.license || req.query.license;
         const device = req.body?.device || req.query.device;
 
-        // لازم كود + جهاز
-        if (!license || !device) {
+        // لازم وجود الكود فقط
+        if (!license) {
             return res.json({
                 success: false,
                 reason: "no_license"
             });
         }
 
-        const BIN_URL = "https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95";
-        const MASTER_KEY = "YOUR_SECRET_KEY";
-
-        // جلب البيانات
+        // جلب الأكواد من jsonbin
         const response = await fetch(`${BIN_URL}/latest`, {
             headers: {
                 "X-Master-Key": MASTER_KEY
@@ -30,11 +31,12 @@ app.all("/check", async (req, res) => {
         const data = await response.json();
         const licenses = data.record?.licenses || [];
 
+        // البحث عن الكود
         const found = licenses.find(
             l => l.key.trim().toLowerCase() === license.trim().toLowerCase()
         );
 
-        // ❌ غير موجود
+        // ❌ الكود غير موجود
         if (!found) {
             return res.json({
                 success: false,
@@ -42,7 +44,7 @@ app.all("/check", async (req, res) => {
             });
         }
 
-        // ❌ غير مفعل
+        // ❌ الكود غير مفعل
         if (!found.active) {
             return res.json({
                 success: false,
@@ -50,13 +52,13 @@ app.all("/check", async (req, res) => {
             });
         }
 
-        // 🔥 ربط الكود بجهاز واحد فقط
+        // 🔥 ربط الكود بجهاز واحد فقط (إذا التطبيق يرسل device)
 
-        // أول مرة → يربط الجهاز تلقائيًا
-        if (!found.device || found.device === "") {
+        // أول استخدام → يربط الجهاز تلقائيًا
+        if (device && (!found.device || found.device === "")) {
             found.device = device;
 
-            // حفظ التعديل في jsonbin
+            // حفظ التعديل داخل jsonbin
             await fetch(BIN_URL, {
                 method: "PUT",
                 headers: {
@@ -70,14 +72,14 @@ app.all("/check", async (req, res) => {
         }
 
         // ❌ إذا الكود مربوط بجهاز آخر
-        else if (found.device !== device) {
+        else if (device && found.device !== device) {
             return res.json({
                 success: false,
                 reason: "wrong_device"
             });
         }
 
-        // 🔥 انتهاء الاشتراك
+        // 🔥 التحقق من انتهاء الاشتراك
         const now = Date.now();
 
         if (found.expiresAt && now > found.expiresAt) {
@@ -90,7 +92,8 @@ app.all("/check", async (req, res) => {
         // ✔ نجاح
         return res.json({
             success: true,
-            license: license
+            license: license,
+            expiresAt: found.expiresAt || null
         });
 
     } catch (e) {
