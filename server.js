@@ -4,110 +4,52 @@ const fetch = require("node-fetch");
 const app = express();
 app.use(express.json());
 
-const BIN_URL = "https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95";
-const MASTER_KEY = "YOUR_SECRET_KEY";
-
 app.all("/check", async (req, res) => {
-    try {
-        // قراءة الكود + الجهاز (device اختياري)
-        const license = req.body?.license || req.query.license;
-        const device = req.body?.device || req.query.device;
+try {
+const license = req.body?.license || req.query.license;
 
-        // لازم وجود الكود فقط
-        if (!license) {
-            return res.json({
-                success: false,
-                reason: "no_license"
-            });
-        }
+if (!license) {  
+        return res.json({ success: false, reason: "no_license" });  
+    }  
 
-        // جلب الأكواد من jsonbin
-        const response = await fetch(`${BIN_URL}/latest`, {
-            headers: {
-                "X-Master-Key": MASTER_KEY
-            }
-        });
+    const response = await fetch("https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95/latest", {  
+        headers: {  
+            "X-Master-Key": "YOUR_SECRET_KEY"  
+        }  
+    });  
 
-        const data = await response.json();
-        const licenses = data.record?.licenses || [];
+    const data = await response.json();  
+    const licenses = data.record?.licenses || [];  
 
-        // البحث عن الكود
-        const found = licenses.find(
-            l => l.key.trim().toLowerCase() === license.trim().toLowerCase()
-        );
+    const found = licenses.find(l => l.key === license);  
 
-        // ❌ الكود غير موجود
-        if (!found) {
-            return res.json({
-                success: false,
-                reason: "not_found"
-            });
-        }
+    if (!found) {  
+        return res.json({ success: false, reason: "not_found" });  
+    }  
 
-        // ❌ الكود غير مفعل
-        if (!found.active) {
-            return res.json({
-                success: false,
-                reason: "inactive"
-            });
-        }
+    if (!found.active) {  
+        return res.json({ success: false, reason: "inactive" });  
+    }  
 
-        // 🔥 ربط الكود بجهاز واحد فقط (إذا التطبيق يرسل device)
+    const now = Date.now();  
 
-        // أول استخدام → يربط الجهاز تلقائيًا
-        if (device && (!found.device || found.device === "")) {
-            found.device = device;
+    if (found.expiresAt && now > found.expiresAt) {  
+        return res.json({ success: false, reason: "expired" });  
+    }  
 
-            // حفظ التعديل داخل jsonbin
-            await fetch(BIN_URL, {
-                method: "PUT",
-                headers: {
-                    "Content-Type": "application/json",
-                    "X-Master-Key": MASTER_KEY
-                },
-                body: JSON.stringify({
-                    licenses: licenses
-                })
-            });
-        }
+    return res.json({  
+        success: true,  
+        license: license  
+    });  
 
-        // ❌ إذا الكود مربوط بجهاز آخر
-        else if (device && found.device !== device) {
-            return res.json({
-                success: false,
-                reason: "wrong_device"
-            });
-        }
+} catch (e) {  
+    return res.json({ success: false, reason: "server_error" });  
+}
 
-        // 🔥 التحقق من انتهاء الاشتراك
-        const now = Date.now();
-
-        if (found.expiresAt && now > found.expiresAt) {
-            return res.json({
-                success: false,
-                reason: "expired"
-            });
-        }
-
-        // ✔ نجاح
-        return res.json({
-            success: true,
-            license: license,
-            expiresAt: found.expiresAt || null
-        });
-
-    } catch (e) {
-        console.log(e);
-
-        return res.json({
-            success: false,
-            reason: "server_error"
-        });
-    }
 });
 
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
-    console.log("Server running...");
+console.log("Server running...");
 });
