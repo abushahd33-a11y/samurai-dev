@@ -4,12 +4,8 @@ const fetch = require("node-fetch");
 const app = express();
 app.use(express.json());
 
-const BIN_ID = "69d1f6e5aaba882197c6ee95";
-const MASTER_KEY = "YOUR_SECRET_KEY";
-
 app.all("/check", async (req, res) => {
     try {
-        // يدعم GET و POST
         const license = req.body?.license || req.query.license;
         const device = req.body?.device || req.query.device;
 
@@ -21,25 +17,24 @@ app.all("/check", async (req, res) => {
             });
         }
 
-        // جلب البيانات من jsonbin
-        const response = await fetch(
-            `https://api.jsonbin.io/v3/b/${BIN_ID}/latest`,
-            {
-                headers: {
-                    "X-Master-Key": MASTER_KEY
-                }
+        const BIN_URL = "https://api.jsonbin.io/v3/b/69d1f6e5aaba882197c6ee95";
+        const MASTER_KEY = "YOUR_SECRET_KEY";
+
+        // جلب البيانات
+        const response = await fetch(`${BIN_URL}/latest`, {
+            headers: {
+                "X-Master-Key": MASTER_KEY
             }
-        );
+        });
 
         const data = await response.json();
         const licenses = data.record?.licenses || [];
 
-        // البحث عن الكود
         const found = licenses.find(
             l => l.key.trim().toLowerCase() === license.trim().toLowerCase()
         );
 
-        // ❌ الكود غير موجود
+        // ❌ غير موجود
         if (!found) {
             return res.json({
                 success: false,
@@ -47,7 +42,7 @@ app.all("/check", async (req, res) => {
             });
         }
 
-        // ❌ الكود غير مفعل
+        // ❌ غير مفعل
         if (!found.active) {
             return res.json({
                 success: false,
@@ -56,26 +51,25 @@ app.all("/check", async (req, res) => {
         }
 
         // 🔥 ربط الكود بجهاز واحد فقط
-        // أول استخدام → يتم ربط الجهاز تلقائيًا
+
+        // أول مرة → يربط الجهاز تلقائيًا
         if (!found.device || found.device === "") {
             found.device = device;
 
             // حفظ التعديل في jsonbin
-            await fetch(
-                `https://api.jsonbin.io/v3/b/${BIN_ID}`,
-                {
-                    method: "PUT",
-                    headers: {
-                        "Content-Type": "application/json",
-                        "X-Master-Key": MASTER_KEY
-                    },
-                    body: JSON.stringify({
-                        licenses: licenses
-                    })
-                }
-            );
+            await fetch(BIN_URL, {
+                method: "PUT",
+                headers: {
+                    "Content-Type": "application/json",
+                    "X-Master-Key": MASTER_KEY
+                },
+                body: JSON.stringify({
+                    licenses: licenses
+                })
+            });
         }
-        // ❌ الكود مربوط بجهاز آخر
+
+        // ❌ إذا الكود مربوط بجهاز آخر
         else if (found.device !== device) {
             return res.json({
                 success: false,
@@ -83,21 +77,20 @@ app.all("/check", async (req, res) => {
             });
         }
 
-        // 🔥 التحقق من انتهاء المدة
+        // 🔥 انتهاء الاشتراك
         const now = Date.now();
 
         if (found.expiresAt && now > found.expiresAt) {
             return res.json({
                 success: false,
-                reason: "expired" // ← انتهى الاشتراك
+                reason: "expired"
             });
         }
 
         // ✔ نجاح
         return res.json({
             success: true,
-            license: license,
-            expiresAt: found.expiresAt || null
+            license: license
         });
 
     } catch (e) {
@@ -110,7 +103,6 @@ app.all("/check", async (req, res) => {
     }
 });
 
-// مهم لـ Render
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, () => {
